@@ -20,10 +20,8 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.googlecode.jatl.Html;
+import groovy.json.JsonOutput;
 import org.apache.commons.lang.StringUtils;
-import org.gradle.api.Transformer;
-import org.gradle.performance.measure.DataSeries;
-import org.gradle.performance.measure.Duration;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -42,27 +40,29 @@ public class TestPageGenerator extends HtmlPageGenerator<PerformanceTestHistory>
     @Override
     public void render(final PerformanceTestHistory testHistory, Writer writer) throws IOException {
         // TODO: Add test name to the report
-        new MetricsHtml(writer) {{
-            html();
-            head();
-            headSection(this);
-            title().text(String.format("Performance test %s", testHistory.getDisplayName())).end();
-            end();
-            body();
-            div().id("content");
-            h2().text(String.format("Test: %s", testHistory.getDisplayName())).end();
-            text(getReproductionInstructions(testHistory));
-            p().text("Tasks: " + getTasks(testHistory)).end();
-            p().text("Clean tasks: " + getCleanTasks(testHistory)).end();
+        // @formatter:off
+        new MetricsHtml(writer) {
+            {
+                html();
+                head();
+                headSection(this);
+                title().text(String.format("Performance test %s", testHistory.getDisplayName())).end();
+                end();
+                body();
+                div().id("content");
+                h2().text(String.format("Test: %s", testHistory.getDisplayName())).end();
+                text(getReproductionInstructions(testHistory));
+                p().text("Tasks: " + getTasks(testHistory)).end();
+                p().text("Clean tasks: " + getCleanTasks(testHistory)).end();
 
-            addPerformanceGraph("Average total time", "totalTimeChart", "totalTime", "total time", "s");
+                addPerformanceGraphs();
 
-            div().id("tooltip").end();
-            div().id("controls").end();
+                div().id("tooltip").end();
+                div().id("controls").end();
 
-            h3().text("Test details").end();
-            table().classAttr("test-details");
-            tr();
+                h3().text("Test details").end();
+                table().classAttr("test-details");
+                tr();
                 th().text("Scenario").end();
                 th().text("Test project").end();
                 th().text("Tasks").end();
@@ -70,9 +70,9 @@ public class TestPageGenerator extends HtmlPageGenerator<PerformanceTestHistory>
                 th().text("Gradle args").end();
                 th().text("Gradle JVM args").end();
                 th().text("Daemon").end();
-            end();
-            for (ScenarioDefinition scenario : testHistory.getScenarios()) {
-                tr();
+                end();
+                for (ScenarioDefinition scenario : testHistory.getScenarios()) {
+                    tr();
                     textCell(scenario.getDisplayName());
                     textCell(scenario.getTestProject());
                     textCell(scenario.getTasks());
@@ -80,80 +80,77 @@ public class TestPageGenerator extends HtmlPageGenerator<PerformanceTestHistory>
                     textCell(scenario.getArgs());
                     textCell(scenario.getGradleOpts());
                     textCell(scenario.getDaemon());
+                    end();
+                }
                 end();
-            }
-            end();
 
-            h3().text("Test history").end();
-            table().classAttr("history");
-            tr().classAttr("control-groups");
-            th().colspan("3").end();
-            final String colspanForField = String.valueOf(testHistory.getScenarioCount() * getColumnsForSamples());
-            th().colspan(colspanForField).text("Average build time").end();
-            th().colspan("8").text("Details").end();
-            end();
-            tr();
-            th().text("Date").end();
-            th().text("Branch").end();
-            th().text("Git commit").end();
-            for (String label : testHistory.getScenarioLabels()) {
-                renderHeaderForSamples(label);
-            }
-            th().text("Test version").end();
-            th().text("Operating System").end();
-            th().text("Host").end();
-            th().text("JVM").end();
-            th().text("Test project").end();
-            th().text("Tasks").end();
-            th().text("Clean tasks").end();
-            th().text("Gradle args").end();
-            th().text("Gradle JVM opts").end();
-            th().text("Daemon").end();
-            end();
-            final int executionsLen = testHistory.getExecutions().size();
-            for (int i = 0; i < executionsLen; i++) {
-                PerformanceTestExecution results = testHistory.getExecutions().get(i);
+                h3().text("Test history").end();
+                table().classAttr("history");
+                tr().classAttr("control-groups");
+                th().colspan("3").end();
+                final String colspanForField = String.valueOf(testHistory.getScenarioCount() * getColumnsForSamples());
+                th().colspan(colspanForField).text("Average build time").end();
+                th().colspan("8").text("Details").end();
+                end();
                 tr();
-                id("result" + results.getExecutionId());
-                renderDateAndLink(results);
-                textCell(results.getVcsBranch());
-
-                td();
-                renderVcsLinks(results, findPreviousExecutionInSameBranch(results, testHistory, i));
+                th().text("Date").end();
+                th().text("Branch").end();
+                th().text("Git commit").end();
+                for (String label : testHistory.getScenarioLabels()) {
+                    renderHeaderForSamples(label);
+                }
+                th().text("Confidence").end();
+                th().text("Difference").end();
+                th().text("Test version").end();
+                th().text("Operating System").end();
+                th().text("Host").end();
+                th().text("JVM").end();
+                th().text("Test project").end();
+                th().text("Tasks").end();
+                th().text("Clean tasks").end();
+                th().text("Gradle args").end();
+                th().text("Gradle JVM opts").end();
+                th().text("Daemon").end();
                 end();
+                final int executionsLen = testHistory.getExecutions().size();
+                for (int i = 0; i < executionsLen; i++) {
+                    PerformanceTestExecution results = testHistory.getExecutions().get(i);
+                    tr();
+                    id("result" + results.getExecutionId());
+                    renderDateAndLink(results);
+                    textCell(results.getVcsBranch());
 
-                final List<MeasuredOperationList> scenarios = results.getScenarios();
-                renderSamplesForExperiment(scenarios, new Transformer<DataSeries<Duration>, MeasuredOperationList>() {
-                    public DataSeries<Duration> transform(MeasuredOperationList original) {
-                        return original.getTotalTime();
-                    }
-                });
-                textCell(results.getVersionUnderTest());
-                textCell(results.getOperatingSystem());
-                textCell(results.getHost());
-                textCell(results.getJvm());
-                textCell(results.getTestProject());
-                textCell(results.getTasks());
-                textCell(results.getCleanTasks());
-                textCell(results.getArgs());
-                textCell(results.getGradleOpts());
-                textCell(results.getDaemon());
+                    td();
+                    renderVcsLinks(results, findPreviousExecutionInSameBranch(results, testHistory, i));
+                    end();
+
+                    renderSamplesForExperiment(results.getScenarios());
+                    textCell(results.getVersionUnderTest());
+                    textCell(results.getOperatingSystem());
+                    textCell(results.getHost());
+                    textCell(results.getJvm());
+                    textCell(results.getTestProject());
+                    textCell(results.getTasks());
+                    textCell(results.getCleanTasks());
+                    textCell(results.getArgs());
+                    textCell(results.getGradleOpts());
+                    textCell(results.getDaemon());
+                    end();
+                }
                 end();
+                end();
+                footer(this);
+                endAll();
             }
-            end();
-            end();
-            footer(this);
-            endAll();
-        }
 
             private void renderDateAndLink(PerformanceTestExecution results) {
                 td();
-                    String date = format.timestamp(new Date(results.getStartTime()));
-                    if(results.getTeamCityBuildId() == null) {
-                        text(date);
-                    } else {
-                        a().href("https://builds.gradle.org/viewLog.html?buildId=" + results.getTeamCityBuildId()).target("_blank").text(date).end();
-                    }
+                String date = FormatSupport.timestamp(new Date(results.getStartTime()));
+                if (results.getTeamCityBuildId() == null) {
+                    text(date);
+                } else {
+                    a().href("https://builds.gradle.org/viewLog.html?buildId=" + results.getTeamCityBuildId()).target("_blank").text(date).end();
+                }
                 end();
             }
 
@@ -187,16 +184,56 @@ public class TestPageGenerator extends HtmlPageGenerator<PerformanceTestHistory>
                 return previousResults;
             }
 
-            private void addPerformanceGraph(String heading, String chartId, String jsonFieldName, String fieldLabel, String fieldUnit) {
-                h3().text(heading).end();
-                div().id(chartId).classAttr("chart");
-                p().text("Loading...").end();
+            private void addPerformanceGraphs() {
+                List<Chart> charts = Lists.newArrayList(new Chart("totalTime", "total time", "s", "totalTimeChart"));
+                if(testHistory instanceof CrossVersionPerformanceTestHistory) {
+                    charts.add(new Chart("confidence", "confidence", "", "confidenceChart"));
+                    charts.add(new Chart("difference", "difference", "", "differenceChart"));
+                }
+
+                charts.forEach(chart -> {
+                    h3().text(StringUtils.capitalize(chart.getLabel())).end();
+                    div().classAttr("chart").id(chart.getChartId());
+                        p().text("Locading...").end();
+                    end();
+                });
+
                 script();
-                text("performanceTests.createPerformanceGraph('" + urlEncode(testHistory.getId()) + ".json', function(data) { return data." + jsonFieldName + "}, '" + fieldLabel + "', '" + fieldUnit + "', '" + chartId + "');");
-                end();
+                    raw("performanceTests.createPerformanceGraph('" + urlEncode(testHistory.getId()) + ".json', " + JsonOutput.toJson(charts) + ")");
                 end();
             }
         };
+    }
+    // @formatter:on
+
+    private static class Chart {
+        private String totalTime;
+        private String label;
+        private String unit;
+        private String chartId;
+
+        private Chart(String totalTime, String label, String unit, String chartId) {
+            this.totalTime = totalTime;
+            this.label = label;
+            this.unit = unit;
+            this.chartId = chartId;
+        }
+
+        public String getTotalTime() {
+            return totalTime;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public String getUnit() {
+            return unit;
+        }
+
+        public String getChartId() {
+            return chartId;
+        }
     }
 
     private static String getTasks(PerformanceTestHistory testHistory) {

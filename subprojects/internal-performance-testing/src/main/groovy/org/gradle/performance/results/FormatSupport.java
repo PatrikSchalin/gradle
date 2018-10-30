@@ -17,7 +17,7 @@
 package org.gradle.performance.results;
 
 import org.gradle.performance.measure.Amount;
-import org.gradle.performance.measure.DataAmount;
+import org.gradle.performance.measure.DataSeries;
 import org.gradle.performance.measure.Duration;
 
 import java.text.DateFormat;
@@ -26,31 +26,51 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class FormatSupport {
-    private final DateFormat timeStampFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    private final DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+    public static String executionTimestamp() {
+        return timestamp(new Date());
+    }
 
-    public FormatSupport() {
+    public static String timestamp(Date date) {
+        return format(date, "yyyy-MM-dd HH:mm:ss");
+    }
+
+    public static String date(Date date) {
+        return format(date, "yyyy-MM-dd");
+    }
+
+    private static String format(Date date, String format) {
+        DateFormat timeStampFormat = new SimpleDateFormat(format);
         timeStampFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-        dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-    }
-
-    public String executionTimestamp() {
-        return timeStampFormat.format(new Date());
-    }
-
-    public String timestamp(Date date) {
         return timeStampFormat.format(date);
     }
 
-    public String date(Date date) {
-        return dateFormat.format(date);
+    public static Number getTotalTimeSeconds(MeasuredOperationList baseline, MeasuredOperationList current) {
+        return baseline.getTotalTime().getMedian().toUnits(Duration.SECONDS).getValue();
     }
 
-    public String seconds(Amount<Duration> duration) {
-        return duration.toUnits(Duration.SECONDS).getValue().toString();
+    public static Number getConfidence(MeasuredOperationList baseline, MeasuredOperationList current) {
+        return DataSeries.confidenceInDifference(baseline.getTotalTime(), current.getTotalTime());
     }
 
-    public String megabytes(Amount<DataAmount> amount) {
-        return amount.toUnits(DataAmount.MEGA_BYTES).getValue().toString();
+    public static Number getDifference(MeasuredOperationList baseline, MeasuredOperationList current) {
+        return getDifference(baseline.getTotalTime(), current.getTotalTime());
+    }
+
+    public static Number getDifference(DataSeries<Duration> baselineVersion, DataSeries<Duration> currentVersion) {
+        double base = baselineVersion.getMedian().getValue().doubleValue();
+        double current = currentVersion.getMedian().getValue().doubleValue();
+        return (current - base) / base;
+    }
+
+    public static String formatDifference(DataSeries<Duration> baselineVersion, DataSeries<Duration> currentVersion) {
+        Amount<Duration> base = baselineVersion.getMedian();
+        Amount<Duration> current = currentVersion.getMedian();
+        Amount<Duration> diff = current.minus(base);
+
+        return String.format("%s (%s)", diff.format(), 100.0 * FormatSupport.getDifference(baselineVersion, currentVersion).doubleValue());
+    }
+
+    public static String formatConfidence(DataSeries<Duration> baselineVersion, DataSeries<Duration> currentVersion) {
+        return String.format("%.1f%%", 100.0 * DataSeries.confidenceInDifference(baselineVersion, currentVersion));
     }
 }

@@ -52,7 +52,7 @@ class ScenarioBuildResultData {
     }
 
     boolean isBuildFailed() {
-        return status == 'FAILURE'  && currentBuildExecutions.empty
+        return status == 'FAILURE' && currentBuildExecutions.empty
     }
 
     boolean isRegressed() {
@@ -113,9 +113,7 @@ class ScenarioBuildResultData {
         }
 
         double getDifferencePercentage() {
-            double base = baseVersion.totalTime.median.value.doubleValue()
-            double current = currentVersion.totalTime.median.value.doubleValue()
-            return 100.0 * (current - base) / base
+            return 100.0 * FormatSupport.getDifference(baseVersion.totalTime, currentVersion.totalTime)
         }
 
         double getConfidencePercentage() {
